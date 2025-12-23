@@ -1,20 +1,17 @@
+-- Initialisation du Schéma
 CREATE SCHEMA IF NOT EXISTS cryptotrade;
 SET search_path = cryptotrade;
 
-CREATE TABLE utilisateurs (
-    id                BIGSERIAL PRIMARY KEY,
-    nom               VARCHAR(50) NOT NULL,
-    email             VARCHAR(100) NOT NULL UNIQUE,
-    date_inscription  DATE NOT NULL DEFAULT CURRENT_DATE,
-    statut            VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIF', 'INACTIF'))
-);
+-- =============================================
+-- 1. TABLES DE RÉFÉRENCE (A créer en premier !)
+-- =============================================
 
-CREATE TABLE cryptomonnaies (
-    id              SERIAL PRIMARY KEY,
+CREATE TABLE utilisateurs (
+    id              BIGSERIAL PRIMARY KEY,
     nom             VARCHAR(50) NOT NULL,
-    symbole         VARCHAR(10) NOT NULL UNIQUE,
-    date_creation   DATE,
-    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIVE', 'DESACTIVE'))
+    email           VARCHAR(100) NOT NULL UNIQUE,
+    date_inscription DATE NOT NULL DEFAULT CURRENT_DATE,
+    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIF', 'INACTIF'))
 );
 
 CREATE TABLE portefeuilles (
@@ -38,8 +35,13 @@ CREATE TABLE paire_trading (
     CONSTRAINT chk_crypto_diff CHECK (crypto_base <> crypto_contre)
 );
 
+-- =============================================
+-- 3. TABLES PARTITIONNÉES (Le coeur du sujet)
+-- =============================================
+
+-- Table ORDRES : Partitionnée par RANGE (date_creation)
 CREATE TABLE ordres (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL, -- Pas de PK simple ici
     utilisateur_id  BIGINT NOT NULL REFERENCES utilisateurs(id),
     paire_id        INT NOT NULL REFERENCES paire_trading(id),
     type_ordre      VARCHAR(10) NOT NULL CHECK (type_ordre IN ('BUY', 'SELL')),
@@ -48,53 +50,76 @@ CREATE TABLE ordres (
     prix            NUMERIC(20,8),
     statut          VARCHAR(20) NOT NULL CHECK (statut IN ('EN_ATTENTE', 'EXECUTE', 'ANNULE')),
     date_creation   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- La PK doit inclure la clé de partition
+    PRIMARY KEY (id, date_creation),
     CONSTRAINT chk_prix_limit CHECK (
         (mode = 'LIMIT' AND prix IS NOT NULL) OR
         (mode = 'MARKET' AND prix IS NULL)
     )
-);
+) PARTITION BY RANGE (date_creation);
 
+-- Création des partitions (Décembre, Janvier, Février)
+CREATE TABLE ordres_p2025_12 PARTITION OF ordres FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
+CREATE TABLE ordres_p2026_01 PARTITION OF ordres FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+CREATE TABLE ordres_default  PARTITION OF ordres DEFAULT; -- Pour le reste
+
+-- Table TRADES : Partitionnée par RANGE (date_execution)
 CREATE TABLE trades (
-    id              BIGSERIAL PRIMARY KEY,
-    ordre_id        BIGINT NOT NULL REFERENCES ordres(id),
+    id              BIGSERIAL,
+    -- On enlève la FK stricte vers ordres(id) car ordres est partitionnée
+    -- C'est complexe à maintenir sur des tables massives, on gère l'intégrité via l'appli ou triggers
+    ordre_id        BIGINT NOT NULL, 
     prix            NUMERIC(20,8) NOT NULL CHECK (prix > 0),
     quantite        NUMERIC(20,8) NOT NULL CHECK (quantite > 0),
-    date_execution  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+    date_execution  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (id, date_execution)
+) PARTITION BY RANGE (date_execution);
 
+CREATE TABLE trades_p2025_12 PARTITION OF trades FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
+CREATE TABLE trades_default  PARTITION OF trades DEFAULT;
+
+-- =============================================
+-- 4. TABLES ANALYTIQUES & AUDIT
+-- =============================================
 
 CREATE TABLE prix_marche (
-    id        BIGSERIAL PRIMARY KEY,
-    paire_id  INT NOT NULL REFERENCES paire_trading(id),
-    prix      NUMERIC(20,8) NOT NULL CHECK (prix > 0),
-    volume    NUMERIC(20,8) NOT NULL CHECK (volume >= 0),
-    date_maj  TIMESTAMPTZ NOT NULL
+    id            BIGSERIAL PRIMARY KEY,
+    paire_id      INT NOT NULL REFERENCES paire_trading(id),
+    prix          NUMERIC(20,8) NOT NULL CHECK (prix > 0),
+    volume        NUMERIC(20,8) NOT NULL CHECK (volume >= 0),
+    date_maj      TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE statistique_marche (
-    id          BIGSERIAL PRIMARY KEY,
-    paire_id    INT NOT NULL REFERENCES paire_trading(id),
-    indicateur  VARCHAR(50) NOT NULL,
-    valeur      NUMERIC(20,8) NOT NULL,
-    periode     VARCHAR(20) NOT NULL,
-    date_maj    TIMESTAMPTZ NOT NULL
+    id            BIGSERIAL PRIMARY KEY,
+    paire_id      INT NOT NULL REFERENCES paire_trading(id),
+    indicateur    VARCHAR(50) NOT NULL,
+    valeur        NUMERIC(20,8) NOT NULL,
+    periode       VARCHAR(20) NOT NULL,
+    date_maj      TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE detection_anomalie (
     id              BIGSERIAL PRIMARY KEY,
     type            VARCHAR(50) NOT NULL,
-    ordre_id        BIGINT REFERENCES ordres(id),
+    ordre_id        BIGINT, -- Pas de FK stricte cause partitionnement
     utilisateur_id  BIGINT REFERENCES utilisateurs(id),
     date_detection  TIMESTAMPTZ NOT NULL DEFAULT now(),
     commentaire     TEXT
 );
 
+-- Table AUDIT_TRAIL : Partitionnée par LIST (action)
 CREATE TABLE audit_trail (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL,
     table_cible     VARCHAR(50) NOT NULL,
     record_id       BIGINT NOT NULL,
     action          VARCHAR(10) NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
     utilisateur_id  BIGINT REFERENCES utilisateurs(id),
     date_action     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    details         TEXT
-);
+    details         TEXT,
+    PRIMARY KEY (id, action) 
+) PARTITION BY LIST (action);
+
+CREATE TABLE audit_insert PARTITION OF audit_trail FOR VALUES IN ('INSERT');
+CREATE TABLE audit_update PARTITION OF audit_trail FOR VALUES IN ('UPDATE');
+CREATE TABLE audit_delete PARTITION OF audit_trail FOR VALUES IN ('DELETE');
