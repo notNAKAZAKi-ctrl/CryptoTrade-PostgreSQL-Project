@@ -16,14 +16,9 @@ CREATE TABLE portefeuilles (
     solde_total     NUMERIC(20,8) NOT NULL CHECK (solde_total >= 0),
     solde_bloque    NUMERIC(20,8) NOT NULL CHECK (solde_bloque >= 0),
     date_maj        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_user_crypto UNIQUE (utilisateur_id, crypto_id),
-    CONSTRAINT chk_solde CHECK (solde_total >= solde_bloque)
+    CONSTRAINT uq_utilisateur_crypto UNIQUE (utilisateur_id, crypto_id),
+    CONSTRAINT chk_solde_portefeuille CHECK (solde_total >= solde_bloque)
 );
-
-ALTER TABLE utilisateurs
-ADD CONSTRAINT fk_utilisateur_portefeuille
-FOREIGN KEY (portefeuille_id)
-REFERENCES portefeuilles(id);
 
 CREATE TABLE cryptomonnaies (
     id              SERIAL PRIMARY KEY,
@@ -53,11 +48,10 @@ CREATE TABLE ordres (
     prix            NUMERIC(20,8),
     statut          VARCHAR(20) NOT NULL CHECK (statut IN ('EN_ATTENTE', 'EXECUTE', 'ANNULE')),
     date_creation   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_prix_limit
-        CHECK (
-            (mode = 'LIMIT' AND prix IS NOT NULL) OR
-            (mode = 'MARKET' AND prix IS NULL)
-        )
+    CONSTRAINT chk_prix_limit CHECK (
+        (mode = 'LIMIT' AND prix IS NOT NULL) OR
+        (mode = 'MARKET' AND prix IS NULL)
+    )
 );
 
 CREATE TABLE trades (
@@ -67,6 +61,7 @@ CREATE TABLE trades (
     quantite        NUMERIC(20,8) NOT NULL CHECK (quantite > 0),
     date_execution  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
 
 CREATE TABLE prix_marche (
     id        BIGSERIAL PRIMARY KEY,
