@@ -1,139 +1,104 @@
--- =========================
--- TABLE UTILISATEURS
--- =========================
-CREATE TABLE UTILISATEURS (
-  id INT PRIMARY KEY,
-  nom VARCHAR(50),
-  email VARCHAR(100),
-  date_inscription DATE,
-  statut VARCHAR(20)
+CREATE SCHEMA IF NOT EXISTS cryptotrade;
+SET search_path = cryptotrade;
+
+CREATE TABLE utilisateurs (
+    id                BIGSERIAL PRIMARY KEY,
+    nom               VARCHAR(50) NOT NULL,
+    email             VARCHAR(100) NOT NULL UNIQUE,
+    date_inscription  DATE NOT NULL DEFAULT CURRENT_DATE,
+    statut            VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIF', 'INACTIF'))
 );
 
--- =========================
--- TABLE CRYPTOMONNAIES
--- =========================
-CREATE TABLE CRYPTOMONNAIES (
-  id INT PRIMARY KEY,
-  nom VARCHAR(50),
-  symbole VARCHAR(10),
-  date_creation DATE,
-  statut VARCHAR(20)
+CREATE TABLE portefeuilles (
+    id              BIGSERIAL PRIMARY KEY,
+    utilisateur_id  BIGINT NOT NULL UNIQUE REFERENCES utilisateurs(id),
+    solde_total     NUMERIC(20,8) NOT NULL CHECK (solde_total >= 0),
+    solde_bloque    NUMERIC(20,8) NOT NULL CHECK (solde_bloque >= 0),
+    date_maj        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_solde_portefeuille
+        CHECK (solde_total >= solde_bloque)
 );
 
--- =========================
--- TABLE PAIRE_TRADING
--- =========================
-CREATE TABLE PAIRE_TRADING (
-  id INT PRIMARY KEY,
-  crypto_base INT,
-  crypto_contre INT,
-  statut VARCHAR(20),
-  date_ouverture DATE,
-  CONSTRAINT fk_crypto_base FOREIGN KEY (crypto_base)
-    REFERENCES CRYPTOMONNAIES(id),
-  CONSTRAINT fk_crypto_contre FOREIGN KEY (crypto_contre)
-    REFERENCES CRYPTOMONNAIES(id)
+ALTER TABLE utilisateurs
+ADD CONSTRAINT fk_utilisateur_portefeuille
+FOREIGN KEY (portefeuille_id)
+REFERENCES portefeuilles(id);
+
+CREATE TABLE cryptomonnaies (
+    id              SERIAL PRIMARY KEY,
+    nom             VARCHAR(50) NOT NULL,
+    symbole         VARCHAR(10) NOT NULL UNIQUE,
+    date_creation   DATE,
+    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIVE', 'DESACTIVE'))
 );
 
--- =========================
--- TABLE PORTEFEUILLES
--- =========================
-CREATE TABLE PORTEFEUILLES (
-  id INT PRIMARY KEY,
-  utilisateur_id INT,
-  solde_total NUMERIC,
-  solde_bloque NUMERIC,
-  date_maj TIMESTAMP,
-  CONSTRAINT fk_portefeuille_user FOREIGN KEY (utilisateur_id)
-    REFERENCES UTILISATEURS(id)
+CREATE TABLE paire_trading (
+    id              SERIAL PRIMARY KEY,
+    crypto_base     INT NOT NULL REFERENCES cryptomonnaies(id),
+    crypto_contre   INT NOT NULL REFERENCES cryptomonnaies(id),
+    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIVE', 'SUSPENDUE')),
+    date_ouverture  DATE NOT NULL,
+    CONSTRAINT uq_paire UNIQUE (crypto_base, crypto_contre),
+    CONSTRAINT chk_crypto_diff CHECK (crypto_base <> crypto_contre)
 );
 
--- =========================
--- TABLE ORDRES
--- =========================
-CREATE TABLE ORDRES (
-  id INT PRIMARY KEY,
-  utilisateur_id INT,
-  paire_id INT,
-  type_ordre VARCHAR(10),
-  mode VARCHAR(10),
-  quantite NUMERIC,
-  prix NUMERIC,
-  statut VARCHAR(20),
-  date_creation TIMESTAMP,
-  CONSTRAINT fk_ordre_user FOREIGN KEY (utilisateur_id)
-    REFERENCES UTILISATEURS(id),
-  CONSTRAINT fk_ordre_paire FOREIGN KEY (paire_id)
-    REFERENCES PAIRE_TRADING(id)
+CREATE TABLE ordres (
+    id              BIGSERIAL PRIMARY KEY,
+    utilisateur_id  BIGINT NOT NULL REFERENCES utilisateurs(id),
+    paire_id        INT NOT NULL REFERENCES paire_trading(id),
+    type_ordre      VARCHAR(10) NOT NULL CHECK (type_ordre IN ('BUY', 'SELL')),
+    mode            VARCHAR(10) NOT NULL CHECK (mode IN ('MARKET', 'LIMIT')),
+    quantite        NUMERIC(20,8) NOT NULL CHECK (quantite > 0),
+    prix            NUMERIC(20,8),
+    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('EN_ATTENTE', 'EXECUTE', 'ANNULE')),
+    date_creation   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_prix_limit
+        CHECK (
+            (mode = 'LIMIT' AND prix IS NOT NULL) OR
+            (mode = 'MARKET' AND prix IS NULL)
+        )
 );
 
--- =========================
--- TABLE TRADES
--- =========================
-CREATE TABLE TRADES (
-  id INT PRIMARY KEY,
-  ordre_id INT,
-  prix NUMERIC,
-  quantite NUMERIC,
-  date_execution TIMESTAMP,
-  CONSTRAINT fk_trade_ordre FOREIGN KEY (ordre_id)
-    REFERENCES ORDRES(id)
+CREATE TABLE trades (
+    id              BIGSERIAL PRIMARY KEY,
+    ordre_id        BIGINT NOT NULL REFERENCES ordres(id),
+    prix            NUMERIC(20,8) NOT NULL CHECK (prix > 0),
+    quantite        NUMERIC(20,8) NOT NULL CHECK (quantite > 0),
+    date_execution  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- =========================
--- TABLE PRIX_MARCHE
--- =========================
-CREATE TABLE PRIX_MARCHE (
-  id INT PRIMARY KEY,
-  paire_id INT,
-  prix NUMERIC,
-  volume NUMERIC,
-  date_maj TIMESTAMP,
-  CONSTRAINT fk_prix_paire FOREIGN KEY (paire_id)
-    REFERENCES PAIRE_TRADING(id)
+CREATE TABLE prix_marche (
+    id        BIGSERIAL PRIMARY KEY,
+    paire_id  INT NOT NULL REFERENCES paire_trading(id),
+    prix      NUMERIC(20,8) NOT NULL CHECK (prix > 0),
+    volume    NUMERIC(20,8) NOT NULL CHECK (volume >= 0),
+    date_maj  TIMESTAMPTZ NOT NULL
 );
 
--- =========================
--- TABLE STATISTIQUE_MARCHE
--- =========================
-CREATE TABLE STATISTIQUE_MARCHE (
-  id INT PRIMARY KEY,
-  paire_id INT,
-  indicateur VARCHAR(50),
-  valeur NUMERIC,
-  periode VARCHAR(20),
-  date_maj TIMESTAMP,
-  CONSTRAINT fk_stat_paire FOREIGN KEY (paire_id)
-    REFERENCES PAIRE_TRADING(id)
+CREATE TABLE statistique_marche (
+    id          BIGSERIAL PRIMARY KEY,
+    paire_id    INT NOT NULL REFERENCES paire_trading(id),
+    indicateur  VARCHAR(50) NOT NULL,
+    valeur      NUMERIC(20,8) NOT NULL,
+    periode     VARCHAR(20) NOT NULL,
+    date_maj    TIMESTAMPTZ NOT NULL
 );
 
--- =========================
--- TABLE DETECTION_ANOMALIE
--- =========================
-CREATE TABLE DETECTION_ANOMALIE (
-  id INT PRIMARY KEY,
-  type VARCHAR(50),
-  ordre_id INT,
-  utilisateur_id INT,
-  date_detection TIMESTAMP,
-  commentaire TEXT,
-  CONSTRAINT fk_anomalie_ordre FOREIGN KEY (ordre_id)
-    REFERENCES ORDRES(id),
-  CONSTRAINT fk_anomalie_user FOREIGN KEY (utilisateur_id)
-    REFERENCES UTILISATEURS(id)
+CREATE TABLE detection_anomalie (
+    id              BIGSERIAL PRIMARY KEY,
+    type            VARCHAR(50) NOT NULL,
+    ordre_id        BIGINT REFERENCES ordres(id),
+    utilisateur_id  BIGINT REFERENCES utilisateurs(id),
+    date_detection  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    commentaire     TEXT
 );
 
--- =========================
--- TABLE AUDIT_TRAIL
--- =========================
-CREATE TABLE AUDIT_TRAIL (
-  id INT PRIMARY KEY,
-  table_cible VARCHAR(50),
-  record_id INT,
-  action VARCHAR(10),
-  utilisateur_id INT,
-  date_action TIMESTAMP,
-  details TEXT,
-  CONSTRAINT fk_audit_user FOREIGN KEY (utilisateur_id)
-    REFERENCES UTILISATEURS(id)
+CREATE TABLE audit_trail (
+    id              BIGSERIAL PRIMARY KEY,
+    table_cible     VARCHAR(50) NOT NULL,
+    record_id       BIGINT NOT NULL,
+    action          VARCHAR(10) NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+    utilisateur_id  BIGINT REFERENCES utilisateurs(id),
+    date_action     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    details         TEXT
 );
