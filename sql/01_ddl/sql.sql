@@ -14,6 +14,18 @@ CREATE TABLE utilisateurs (
     statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIF', 'INACTIF'))
 );
 
+CREATE TABLE cryptomonnaies (
+    id              SERIAL PRIMARY KEY,
+    nom             VARCHAR(50) NOT NULL,
+    symbole         VARCHAR(10) NOT NULL UNIQUE,
+    date_creation   DATE,
+    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIVE', 'DESACTIVE'))
+);
+
+-- =============================================
+-- 2. TABLES DÉPENDANTES (Besoin des refs ci-dessus)
+-- =============================================
+
 CREATE TABLE portefeuilles (
     id              BIGSERIAL PRIMARY KEY,
     utilisateur_id  BIGINT NOT NULL REFERENCES utilisateurs(id),
