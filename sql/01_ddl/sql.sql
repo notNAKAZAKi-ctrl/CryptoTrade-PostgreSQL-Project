@@ -9,6 +9,14 @@ CREATE TABLE utilisateurs (
     statut            VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIF', 'INACTIF'))
 );
 
+CREATE TABLE cryptomonnaies (
+    id              SERIAL PRIMARY KEY,
+    nom             VARCHAR(50) NOT NULL,
+    symbole         VARCHAR(10) NOT NULL UNIQUE,
+    date_creation   DATE,
+    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIVE', 'DESACTIVE'))
+);
+
 CREATE TABLE portefeuilles (
     id              BIGSERIAL PRIMARY KEY,
     utilisateur_id  BIGINT NOT NULL REFERENCES utilisateurs(id),
@@ -18,14 +26,6 @@ CREATE TABLE portefeuilles (
     date_maj        TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_utilisateur_crypto UNIQUE (utilisateur_id, crypto_id),
     CONSTRAINT chk_solde_portefeuille CHECK (solde_total >= solde_bloque)
-);
-
-CREATE TABLE cryptomonnaies (
-    id              SERIAL PRIMARY KEY,
-    nom             VARCHAR(50) NOT NULL,
-    symbole         VARCHAR(10) NOT NULL UNIQUE,
-    date_creation   DATE,
-    statut          VARCHAR(20) NOT NULL CHECK (statut IN ('ACTIVE', 'DESACTIVE'))
 );
 
 CREATE TABLE paire_trading (
