@@ -89,6 +89,12 @@ CREATE TABLE trades (
 
 CREATE TABLE trades_p2025_12 PARTITION OF trades FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
 CREATE TABLE trades_default  PARTITION OF trades DEFAULT;
+-- Ajout des partitions pour le futur (à mettre dans le script DDL)
+CREATE TABLE ordres_p2026_02 PARTITION OF ordres FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE ordres_p2026_03 PARTITION OF ordres FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+
+CREATE TABLE trades_p2026_02 PARTITION OF trades FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE trades_p2026_03 PARTITION OF trades FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
 
 -- =============================================
 -- 4. TABLES ANALYTIQUES & AUDIT
