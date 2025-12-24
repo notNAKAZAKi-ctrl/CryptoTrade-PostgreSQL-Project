@@ -191,7 +191,3 @@ CREATE INDEX idx_detection_ordre ON detection_anomalie(ordre_id);
 -- AUDIT_TRAIL
 CREATE INDEX idx_audit_table_record ON audit_trail(table_cible, record_id);
 CREATE INDEX idx_audit_date ON audit_trail(date_action);
-
--- =============================================================================
--- FIN DU SCRIPT
--- =============================================================================
