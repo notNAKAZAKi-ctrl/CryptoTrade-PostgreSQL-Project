@@ -23,7 +23,7 @@ CREATE TABLE cryptomonnaies (
 );
 
 -- =============================================
--- 2. TABLES DÉPENDANTES (Besoin des refs ci-dessus)
+-- 2. TABLES DÉPENDANTES 
 -- =============================================
 
 CREATE TABLE portefeuilles (
@@ -53,7 +53,7 @@ CREATE TABLE paire_trading (
 
 -- Table ORDRES : Partitionnée par RANGE (date_creation)
 CREATE TABLE ordres (
-    id              BIGSERIAL, -- Pas de PK simple ici
+    id              BIGSERIAL,
     utilisateur_id  BIGINT NOT NULL REFERENCES utilisateurs(id),
     paire_id        INT NOT NULL REFERENCES paire_trading(id),
     type_ordre      VARCHAR(10) NOT NULL CHECK (type_ordre IN ('BUY', 'SELL')),
@@ -73,28 +73,29 @@ CREATE TABLE ordres (
 -- Création des partitions (Décembre, Janvier, Février)
 CREATE TABLE ordres_p2025_12 PARTITION OF ordres FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
 CREATE TABLE ordres_p2026_01 PARTITION OF ordres FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-CREATE TABLE ordres_default  PARTITION OF ordres DEFAULT; -- Pour le reste
-
--- Table TRADES : Partitionnée par RANGE (date_execution)
-CREATE TABLE trades (
-    id              BIGSERIAL,
-    -- On enlève la FK stricte vers ordres(id) car ordres est partitionnée
-    -- C'est complexe à maintenir sur des tables massives, on gère l'intégrité via l'appli ou triggers
-    ordre_id        BIGINT NOT NULL, 
-    prix            NUMERIC(20,8) NOT NULL CHECK (prix > 0),
-    quantite        NUMERIC(20,8) NOT NULL CHECK (quantite > 0),
-    date_execution  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (id, date_execution)
-) PARTITION BY RANGE (date_execution);
-
-CREATE TABLE trades_p2025_12 PARTITION OF trades FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
-CREATE TABLE trades_default  PARTITION OF trades DEFAULT;
--- Ajout des partitions pour le futur (à mettre dans le script DDL)
+CREATE TABLE ordres_default  PARTITION OF ordres DEFAULT;
 CREATE TABLE ordres_p2026_02 PARTITION OF ordres FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
 CREATE TABLE ordres_p2026_03 PARTITION OF ordres FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
 
+-- Table TRADES : Partitionnée par RANGE + Optimisée avec paire_id
+CREATE TABLE trades (
+    id              BIGSERIAL,
+    ordre_id        BIGINT NOT NULL, 
+    paire_id        INT NOT NULL REFERENCES paire_trading(id),
+    prix            NUMERIC(20,8) NOT NULL CHECK (prix > 0),
+    quantite        NUMERIC(20,8) NOT NULL CHECK (quantite > 0),
+    date_execution  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    
+    -- La PK doit inclure la clé de partition
+    PRIMARY KEY (id, date_execution)
+) PARTITION BY RANGE (date_execution);
+
+-- Création des partitions (Vital pour que ça marche !)
+CREATE TABLE trades_p2025_12 PARTITION OF trades FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
+CREATE TABLE trades_p2026_01 PARTITION OF trades FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
 CREATE TABLE trades_p2026_02 PARTITION OF trades FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
 CREATE TABLE trades_p2026_03 PARTITION OF trades FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+CREATE TABLE trades_default  PARTITION OF trades DEFAULT;
 
 -- =============================================
 -- 4. TABLES ANALYTIQUES & AUDIT
