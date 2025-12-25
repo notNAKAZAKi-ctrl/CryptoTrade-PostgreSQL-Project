@@ -8,9 +8,10 @@ CREATE SCHEMA IF NOT EXISTS cryptotrade;
 SET search_path = cryptotrade;
 
 -- Activation des extensions (à exécuter une fois)
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-CREATE EXTENSION IF NOT EXISTS auto_explain;
 
+---CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+---CREATE EXTENSION IF NOT EXISTS auto_explain;
+---
 -- =============================================================================
 -- 2. TABLES DE RÉFÉRENCE
 -- =============================================================================
@@ -47,7 +48,6 @@ CREATE TABLE portefeuilles (
 );
 
 CREATE TABLE paire_trading (
-    
     id              SERIAL PRIMARY KEY,
     crypto_base     INT NOT NULL REFERENCES cryptomonnaies(id),
     crypto_contre   INT NOT NULL REFERENCES cryptomonnaies(id),
@@ -175,7 +175,7 @@ CREATE INDEX idx_ordres_paire_statut_prix ON ordres(paire_id, statut, prix)
 CREATE INDEX idx_ordres_user ON ordres(utilisateur_id);
 CREATE INDEX idx_ordres_date ON ordres(date_creation);
 
--- TRADES ✅ CORRIGÉ : index couvrant avec INCLUDE
+-- TRADES
 CREATE INDEX idx_trades_covering ON trades(paire_id, date_execution) INCLUDE (prix, quantite);
 CREATE INDEX idx_trades_ordre ON trades(ordre_id);
 
@@ -192,15 +192,10 @@ CREATE INDEX idx_detection_ordre ON detection_anomalie(ordre_id);
 -- AUDIT_TRAIL
 CREATE INDEX idx_audit_table_record ON audit_trail(table_cible, record_id);
 CREATE INDEX idx_audit_date ON audit_trail(date_action);
-<<<<<<< HEAD:sql/01_ddl/sql_ind.sql
+
 
 CREATE INDEX idx_audit_details_gin
 ON audit_trail
 USING GIN (to_tsvector('simple', details));
 
-
--- =============================================================================
--- FIN DU SCRIPT
--- =============================================================================
-=======
->>>>>>> dd573e1008d7d79a5d1fe411be30e6771f274087:sql/01_ddl/01_create_tables.sql
+------------------------------------------
