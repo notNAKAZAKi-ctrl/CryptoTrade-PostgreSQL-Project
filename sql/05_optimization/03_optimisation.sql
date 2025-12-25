@@ -74,7 +74,7 @@ CREATE TABLE ordres (
     mode            VARCHAR(10) NOT NULL CHECK (mode IN ('MARKET', 'LIMIT')),
     quantite        NUMERIC(36,18) NOT NULL CHECK (quantite > 0),
     quantite_restante NUMERIC(36,18) NOT NULL,
-    prix            NUMERIC(24,8),
+    prix            NUMERIC(24,8) NOT NULL CHECK (prix > 0),
     statut          VARCHAR(20) NOT NULL CHECK (statut IN ('EN_ATTENTE', 'EXECUTE', 'ANNULE')),
     date_creation   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (id, date_creation)
