@@ -18,7 +18,7 @@ BEGIN
     SELECT crypto_base, crypto_contre INTO v_crypto_base, v_crypto_contre 
     FROM paire_trading WHERE id = NEW.paire_id;
 
-    -- 🔒 ADVISORY LOCK : On verrouille le portefeuille de l'utilisateur pour cette transaction
+    -- ADVISORY LOCK : On verrouille le portefeuille de l'utilisateur pour cette transaction
     -- Cela empêche deux trades simultanés de modifier le même solde en même temps (Race Condition)
     PERFORM pg_advisory_xact_lock(v_buyer_id);
 
