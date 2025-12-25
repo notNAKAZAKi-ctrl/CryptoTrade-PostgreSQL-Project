@@ -135,8 +135,7 @@ CREATE TABLE statistique_marche (
     date_maj      TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_stat_paire_indic
-ON statistique_marche (paire_id, indicateur);
+CREATE INDEX idx_stat_paire_indic ON statistique_marche (paire_id, indicateur);
 
 CREATE TABLE detection_anomalie (
     id              BIGSERIAL PRIMARY KEY,
