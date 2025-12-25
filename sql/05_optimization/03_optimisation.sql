@@ -226,7 +226,8 @@ CREATE UNIQUE INDEX idx_mv_vol_unique ON mv_volatilite(paire_id, heure);
 -- =============================================================================
 -- BONUS : PROCEDURE DE MISE À JOUR AUTOMATIQUE
 -- =============================================================================
--- Cette procédure peut être appelée par un cron job ou après un gros batch de trades
+-- Cette procédure peut être appelée par un cron job ou après u
+n gros batch de trades
 CREATE OR REPLACE PROCEDURE rafraichir_indicateurs()
 LANGUAGE plpgsql AS $$
 BEGIN
