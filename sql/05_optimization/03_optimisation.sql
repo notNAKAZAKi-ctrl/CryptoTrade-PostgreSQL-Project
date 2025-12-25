@@ -286,3 +286,82 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- Fonction de détection automatique
+CREATE OR REPLACE FUNCTION fn_analyse_comportement_suspect()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_nb_annulations INT;
+BEGIN
+    -- 1. DETECTION WASH TRADING (Sur la table TRADES)
+    IF TG_TABLE_NAME = 'trades' THEN
+        IF NEW.acheteur_id = NEW.vendeur_id THEN
+            INSERT INTO detection_anomalie (type, ordre_id, utilisateur_id, commentaire)
+            VALUES ('WASH_TRADING', NEW.ordre_id, NEW.acheteur_id, 
+                   format('Auto-trade détecté : l''utilisateur a matché son propre ordre sur la paire %s', NEW.paire_id));
+        END IF;
+    END IF;
+
+    -- 2. DETECTION SPOOFING (Sur la table ORDRES)
+    -- On cherche si l'utilisateur a annulé beaucoup d'ordres importants en peu de temps
+    IF TG_TABLE_NAME = 'ordres' AND NEW.statut = 'ANNULE' THEN
+        SELECT COUNT(*) INTO v_nb_annulations
+        FROM ordres
+        WHERE utilisateur_id = NEW.utilisateur_id
+          AND statut = 'ANNULE'
+          AND date_creation > NOW() - INTERVAL '10 minutes';
+
+        IF v_nb_annulations > 10 THEN
+            INSERT INTO detection_anomalie (type, ordre_id, utilisateur_id, commentaire)
+            VALUES ('SPOOFING', NEW.id, NEW.utilisateur_id, 
+                   format('Pattern suspect : %s annulations en moins de 10 minutes', v_nb_annulations));
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Activation des triggers
+CREATE TRIGGER trg_detect_wash_trade AFTER INSERT ON trades FOR EACH ROW EXECUTE FUNCTION fn_analyse_comportement_suspect();
+CREATE TRIGGER trg_detect_spoofing AFTER UPDATE ON ordres FOR EACH ROW WHEN (NEW.statut = 'ANNULE') EXECUTE FUNCTION fn_analyse_comportement_suspect();
+
+
+-- =============================================================================
+-- INSERTION DE QUELQUES FRAUDES POUR TESTER (VERSION CORRIGÉE)
+-- =============================================================================
+
+CREATE OR REPLACE PROCEDURE cryptotrade.simuler_scenarios_fraude()
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_now TIMESTAMPTZ := NOW(); -- On utilise la même seconde pour tout le test
+    v_ordre_id BIGINT;
+BEGIN
+    -- Nettoyage pour repartir sur un test propre
+    DELETE FROM cryptotrade.detection_anomalie;
+
+    -- SCÉNARIO 1 : Simulation Wash Trading
+    -- Un utilisateur crée un trade où il est acheteur ET vendeur
+    RAISE NOTICE 'Simulation Wash Trading...';
+    INSERT INTO cryptotrade.trades (ordre_id, paire_id, acheteur_id, vendeur_id, prix, quantite, date_execution)
+    VALUES (999, 1, 100, 100, 50000, 0.5, v_now); -- Ajout de date_execution pour le partitionnement
+
+    -- SCÉNARIO 2 : Simulation Spoofing
+    -- Un utilisateur crée et annule rapidement 11 ordres
+    RAISE NOTICE 'Simulation Spoofing...';
+    FOR i IN 1..11 LOOP
+        -- 1. Insertion de l'ordre avec date_creation
+        INSERT INTO cryptotrade.ordres (utilisateur_id, paire_id, type_ordre, mode, quantite, quantite_restante, prix, statut, date_creation)
+        VALUES (200, 1, 'BUY', 'LIMIT', 10, 10, 49000, 'EN_ATTENTE', v_now)
+        RETURNING id INTO v_ordre_id;
+        
+        -- 2. Annulation immédiate (déclenche le trigger fn_analyse_comportement_suspect)
+        -- Important : on précise la date dans le WHERE pour que PostgreSQL cible la bonne partition
+        UPDATE cryptotrade.ordres 
+        SET statut = 'ANNULE' 
+        WHERE id = v_ordre_id AND date_creation = v_now;
+    END LOOP;
+
+    RAISE NOTICE 'Simulation terminée. Vérifiez la table detection_anomalie.';
+END;
+$$;
