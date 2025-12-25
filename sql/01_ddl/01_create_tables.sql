@@ -192,6 +192,7 @@ CREATE INDEX idx_detection_ordre ON detection_anomalie(ordre_id);
 -- AUDIT_TRAIL
 CREATE INDEX idx_audit_table_record ON audit_trail(table_cible, record_id);
 CREATE INDEX idx_audit_date ON audit_trail(date_action);
+<<<<<<< HEAD:sql/01_ddl/sql_ind.sql
 
 CREATE INDEX idx_audit_details_gin
 ON audit_trail
@@ -201,3 +202,5 @@ USING GIN (to_tsvector('simple', details));
 -- =============================================================================
 -- FIN DU SCRIPT
 -- =============================================================================
+=======
+>>>>>>> dd573e1008d7d79a5d1fe411be30e6771f274087:sql/01_ddl/01_create_tables.sql
