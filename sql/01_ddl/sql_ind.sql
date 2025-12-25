@@ -47,6 +47,7 @@ CREATE TABLE portefeuilles (
 );
 
 CREATE TABLE paire_trading (
+    
     id              SERIAL PRIMARY KEY,
     crypto_base     INT NOT NULL REFERENCES cryptomonnaies(id),
     crypto_contre   INT NOT NULL REFERENCES cryptomonnaies(id),
@@ -174,8 +175,8 @@ CREATE INDEX idx_ordres_paire_statut_prix ON ordres(paire_id, statut, prix)
 CREATE INDEX idx_ordres_user ON ordres(utilisateur_id);
 CREATE INDEX idx_ordres_date ON ordres(date_creation);
 
--- TRADES
-CREATE INDEX idx_trades_paire_date ON trades(paire_id, date_execution); -- ✅ Composite + covering
+-- TRADES ✅ CORRIGÉ : index couvrant avec INCLUDE
+CREATE INDEX idx_trades_covering ON trades(paire_id, date_execution) INCLUDE (prix, quantite);
 CREATE INDEX idx_trades_ordre ON trades(ordre_id);
 
 -- PRIX_MARCHE
@@ -191,6 +192,11 @@ CREATE INDEX idx_detection_ordre ON detection_anomalie(ordre_id);
 -- AUDIT_TRAIL
 CREATE INDEX idx_audit_table_record ON audit_trail(table_cible, record_id);
 CREATE INDEX idx_audit_date ON audit_trail(date_action);
+
+CREATE INDEX idx_audit_details_gin
+ON audit_trail
+USING GIN (to_tsvector('simple', details));
+
 
 -- =============================================================================
 -- FIN DU SCRIPT
