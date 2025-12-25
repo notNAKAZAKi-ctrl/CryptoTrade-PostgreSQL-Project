@@ -172,6 +172,71 @@ CREATE TABLE detection_anomalie (
 );
 
 -- =============================================================================
+-- 4. ANALYTIQUES AVANCÉES (Vues Matérialisées)
+-- =============================================================================
+
+-- 1. VWAP (Volume Weighted Average Price) sur 24h
+CREATE MATERIALIZED VIEW mv_vwap AS
+SELECT
+    paire_id,
+    SUM(prix * quantite) / NULLIF(SUM(quantite), 0) AS vwap,
+    MAX(date_execution) AS last_update
+FROM trades
+WHERE date_execution >= NOW() - INTERVAL '24 hours'
+GROUP BY paire_id;
+
+-- Index UNIQUE obligatoire pour le rafraîchissement CONCURRENT
+CREATE UNIQUE INDEX idx_mv_vwap_unique ON mv_vwap(paire_id);
+
+-- 2. RSI (Relative Strength Index)
+CREATE MATERIALIZED VIEW mv_rsi AS
+WITH base AS (
+    SELECT
+        paire_id,
+        date_execution,
+        prix - LAG(prix) OVER (PARTITION BY paire_id ORDER BY date_execution) AS variation
+    FROM trades
+    WHERE date_execution >= NOW() - INTERVAL '24 hours' -- Limiter la fenêtre pour la performance
+)
+SELECT
+    paire_id,
+    100 - (100 / (1 + 
+        NULLIF(AVG(CASE WHEN variation > 0 THEN variation ELSE 0 END), 0) 
+        / 
+        NULLIF(AVG(CASE WHEN variation < 0 THEN ABS(variation) ELSE 0 END), 1)
+    )) AS rsi,
+    NOW() as last_update
+FROM base
+GROUP BY paire_id;
+
+CREATE UNIQUE INDEX idx_mv_rsi_unique ON mv_rsi(paire_id);
+
+-- 3. Volatilité horaire
+CREATE MATERIALIZED VIEW mv_volatilite AS
+SELECT
+    paire_id,
+    date_trunc('hour', date_execution) AS heure,
+    STDDEV(prix) AS volatilite
+FROM trades
+GROUP BY paire_id, date_trunc('hour', date_execution);
+
+-- Index unique sur le couple paire/heure
+CREATE UNIQUE INDEX idx_mv_vol_unique ON mv_volatilite(paire_id, heure);
+
+-- =============================================================================
+-- BONUS : PROCEDURE DE MISE À JOUR AUTOMATIQUE
+-- =============================================================================
+-- Cette procédure peut être appelée par un cron job ou après un gros batch de trades
+CREATE OR REPLACE PROCEDURE rafraichir_indicateurs()
+LANGUAGE plpgsql AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_vwap;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_rsi;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_volatilite;
+END;
+$$;
+
+-- =============================================================================
 -- 5. INDEXATION STRATÉGIQUE (Le coeur de la performance)
 -- =============================================================================
 
