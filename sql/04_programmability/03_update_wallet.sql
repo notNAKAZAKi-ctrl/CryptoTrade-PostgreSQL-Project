@@ -22,8 +22,9 @@ BEGIN
     FROM paire_trading 
     WHERE id = NEW.paire_id;
 
-    -- 3. VERROUILLAGE (Anti-Deadlock)
-    PERFORM pg_advisory_xact_lock(v_user_id);
+    -- 🔒 ADVISORY LOCK : On verrouille le portefeuille de l'utilisateur pour cette transaction
+    -- Cela empêche deux trades simultanés de modifier le même solde en même temps (Race Condition)
+    PERFORM pg_advisory_xact_lock(v_buyer_id);
 
     -- 4. Mise à jour des soldes
     IF v_type_ordre = 'BUY' THEN

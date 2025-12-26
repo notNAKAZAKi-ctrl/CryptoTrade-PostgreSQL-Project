@@ -38,7 +38,7 @@ CREATE TRIGGER trg_detect_wash_trade AFTER INSERT ON trades FOR EACH ROW EXECUTE
 CREATE TRIGGER trg_detect_spoofing AFTER UPDATE ON ordres FOR EACH ROW WHEN (NEW.statut = 'ANNULE') EXECUTE FUNCTION fn_analyse_comportement_suspect();
 
 
--- verifier que  detection_anomalie se remplit correctement
+-- Insertion de quelques fraudes pour tester
 
 CREATE OR REPLACE PROCEDURE simuler_scenarios_fraude()
 LANGUAGE plpgsql AS $$
@@ -73,3 +73,6 @@ SELECT
     commentaire 
 FROM detection_anomalie 
 ORDER BY date_detection DESC;
+
+-- affichage 
+SELECT * FROM detection_anomalie;
